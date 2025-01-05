@@ -1,12 +1,7 @@
-import type React from "preact/compat";
 import ActivityGroup from "./ActivityGroup";
 import PlanPreview from "./PlanPreview";
-import {
-	groups,
-	generatedPlan,
-	error,
-	type ActivityGroupData,
-} from "../../signals";
+import { groups, generatedPlan, error, remindersEnabled } from "../../signals";
+import type { JSX } from "preact";
 
 const ActivityPlanner = () => {
 	const handleGroupChange = (
@@ -14,64 +9,44 @@ const ActivityPlanner = () => {
 		field: string,
 		value: string | number,
 	) => {
-		const updatedGroups = [...groups.value];
-		updatedGroups[index] = { ...updatedGroups[index], [field]: value };
-		groups.value = updatedGroups;
+		groups.value = groups.value.map((g, i) =>
+			i === index ? { ...g, [field]: value } : g,
+		);
 	};
 
-	const addGroup = () => {
-		groups.value = [
-			...groups.value,
-			{ name: "", numberOfSessions: 1, sessionLength: 40, breakLength: 10 },
-		];
-	};
+	const handleSubmit = async (e: JSX.TargetedEvent<HTMLFormElement>) => {
+		e.preventDefault();
 
-	const removeGroup = (index: number) => {
-		groups.value = groups.value.filter((_, i) => i !== index);
-	};
-
-	const validateForm = (): boolean => {
 		if (groups.value.some((g) => !g.name || g.numberOfSessions < 1)) {
 			error.value = "Please fill in all activity names and number of sessions";
-			return false;
+			return;
 		}
-		error.value = "";
-		return true;
-	};
-
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		if (!validateForm()) return;
 
 		try {
 			const response = await fetch("/api/v1/ics", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ groups: groups.value }),
+				body: JSON.stringify({ groups: groups.value, remindersEnabled: remindersEnabled.value }),
 			});
 
-			if (!response.ok) {
-				throw new Error("Failed to generate plan");
-			}
+			if (!response.ok) throw new Error("Failed to generate plan");
 
-			const data = await response.json();
+			const { zipBase64, plan } = await response.json();
 
-			// Handle ZIP file download
-			const zipBlob = new Blob(
-				[Uint8Array.from(atob(data.zipBase64), (c) => c.charCodeAt(0))],
-				{ type: "application/zip" },
+			// Download ZIP file
+			const url = window.URL.createObjectURL(
+				new Blob([Uint8Array.from(atob(zipBase64), (c) => c.charCodeAt(0))], {
+					type: "application/zip",
+				}),
 			);
-			const url = window.URL.createObjectURL(zipBlob);
 			const a = document.createElement("a");
 			a.href = url;
 			a.download = "plans.zip";
 			a.click();
 			window.URL.revokeObjectURL(url);
 
-			// Update plan preview
-			if (data.plan) {
-				generatedPlan.value = data.plan;
-			}
+			if (plan) generatedPlan.value = plan;
+			error.value = "";
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : "An error occurred";
 		}
@@ -85,20 +60,42 @@ const ActivityPlanner = () => {
 					{error.value}
 				</div>
 			)}
+
 			<form onSubmit={handleSubmit} className="space-y-4">
+				<label className="flex items-center">
+					<input
+						type="checkbox"
+						checked={remindersEnabled.value}
+						onChange={(e) => (remindersEnabled.value = e.currentTarget.checked)}
+					/>
+					<span className="ml-2">Enable Reminders</span>
+				</label>
 				{groups.value.map((group, index) => (
 					<ActivityGroup
 						key={`${group.name}-${index}`}
 						group={group}
 						index={index}
 						onChange={handleGroupChange}
-						onRemove={removeGroup}
+						onRemove={() => {
+							groups.value = groups.value.filter((_, i) => i !== index);
+						}}
 					/>
 				))}
+
 				<div className="flex space-x-4">
 					<button
 						type="button"
-						onClick={addGroup}
+						onClick={() => {
+							groups.value = [
+								...groups.value,
+								{
+									name: "",
+									numberOfSessions: 1,
+									sessionLength: 40,
+									breakLength: 10,
+								},
+							];
+						}}
 						className="bg-blue-500 text-white px-4 py-2 rounded"
 					>
 						Add Activity Group
@@ -111,6 +108,7 @@ const ActivityPlanner = () => {
 					</button>
 				</div>
 			</form>
+
 			{generatedPlan.value.length > 0 && <PlanPreview />}
 		</div>
 	);

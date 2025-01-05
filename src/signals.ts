@@ -15,8 +15,9 @@ export interface PlanItem {
 }
 
 export const groups = signal<ActivityGroupData[]>([
-    { name: "", numberOfSessions: 1, sessionLength: 40, breakLength: 10 }
+    { name: "", numberOfSessions: 1, sessionLength: 50, breakLength: 10 }
 ]);
 
 export const generatedPlan = signal<PlanItem[]>([]);
 export const error = signal<string>("");
+export const remindersEnabled = signal<boolean>(false);

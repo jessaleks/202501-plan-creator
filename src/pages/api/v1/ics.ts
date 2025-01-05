@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 const formatDate = (date: Date) =>
 	`${date.toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
 
-const generateICS = (events: { summary: string; start: Date; end: Date }[]) => {
+const generateICS = (events: { summary: string; start: Date; end: Date }[], includeAlarm: boolean) => {
 	const header = [
 		"BEGIN:VCALENDAR",
 		"VERSION:2.0",
@@ -14,23 +14,33 @@ const generateICS = (events: { summary: string; start: Date; end: Date }[]) => {
 	];
 	const footer = ["END:VCALENDAR"];
 
-	const eventsContent = events.map((event) =>
-		`
+	const eventsContent = events.map((event) => {
+		const alarm = includeAlarm
+			? `
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+TRIGGER:-PT5M
+END:VALARM`
+			: "";
+
+		return `
 BEGIN:VEVENT
 UID:${uuidv4()}
 SUMMARY:${event.summary}
 DTSTAMP:${formatDate(new Date())}
 DTSTART:${formatDate(event.start)}
 DTEND:${formatDate(event.end)}
+${alarm}
 END:VEVENT
-  `.trim(),
-	);
+  `.trim();
+	});
 
 	return [...header, ...eventsContent, ...footer].join("\n");
 };
 
 export const POST: APIRoute = async ({ request }) => {
-	const { groups } = await request.json();
+	const { groups, remindersEnabled } = await request.json();
 
 	if (!groups || !Array.isArray(groups)) {
 		return new Response("Invalid input", { status: 400 });
@@ -96,7 +106,7 @@ export const POST: APIRoute = async ({ request }) => {
 		allEvents.push(...events);
 		planPreview.push(groupPlan);
 
-		const icsContent = generateICS(events);
+		const icsContent = generateICS(events, remindersEnabled === true);
 		zip.file(`${name.replace(/\s+/g, "_")}.ics`, icsContent);
 	}
 
