@@ -43,7 +43,7 @@ const ActivityGroup = ({
 }: ActivityGroupProps) => (
 	<div className="p-4 border border-gray-300 rounded space-y-4 bg-white shadow-sm">
 		<InputField
-			label="Activity Name"
+			label="Activity Name (e.g., 'Work', 'Study', 'Exercise'):"
 			type="text"
 			value={group.name}
 			onChange={(e) => onChange(index, "name", e.currentTarget.value)}

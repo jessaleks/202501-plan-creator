@@ -1,6 +1,6 @@
 import ActivityGroup from "./ActivityGroup";
 import PlanPreview from "./PlanPreview";
-import { groups, generatedPlan, error, remindersEnabled } from "../../signals";
+import { groups, generatedPlan, error } from "../../signals";
 import type { JSX } from "preact";
 
 const ActivityPlanner = () => {
@@ -26,7 +26,7 @@ const ActivityPlanner = () => {
 			const response = await fetch("/api/v1/ics", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ groups: groups.value, remindersEnabled: remindersEnabled.value }),
+				body: JSON.stringify({ groups: groups.value, remindersEnabled: true }),
 			});
 
 			if (!response.ok) throw new Error("Failed to generate plan");
@@ -62,14 +62,7 @@ const ActivityPlanner = () => {
 			)}
 
 			<form onSubmit={handleSubmit} className="space-y-4">
-				<label className="flex items-center">
-					<input
-						type="checkbox"
-						checked={remindersEnabled.value}
-						onChange={(e) => (remindersEnabled.value = e.currentTarget.checked)}
-					/>
-					<span className="ml-2">Enable Reminders</span>
-				</label>
+
 				{groups.value.map((group, index) => (
 					<ActivityGroup
 						key={`${group.name}-${index}`}
@@ -91,7 +84,7 @@ const ActivityPlanner = () => {
 								{
 									name: "",
 									numberOfSessions: 1,
-									sessionLength: 40,
+									sessionLength: 50,
 									breakLength: 10,
 								},
 							];
