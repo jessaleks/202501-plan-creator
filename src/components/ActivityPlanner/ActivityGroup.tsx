@@ -23,12 +23,12 @@ const InputField = ({
 	min = "1",
 }: InputFieldProps) => (
 	<label className="block">
-		<span className="text-gray-700">{label}:</span>
+		<span className="text-gray-900">{label}</span>
 		<input
 			type={type}
 			value={value}
 			onChange={onChange}
-			className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+			className="text-slate-700 mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-100 focus:ring focus:ring-blue-100 focus:ring-opacity-30"
 			required
 			min={min}
 		/>
@@ -41,7 +41,12 @@ const ActivityGroup = ({
 	onChange,
 	onRemove,
 }: ActivityGroupProps) => (
-	<div className="p-4 border border-gray-300 rounded space-y-4 bg-white shadow-sm">
+	<div className="p-4 border border-gray-400 rounded space-y-4 bg-white shadow-sm">
+		<h2 class={"font-bold"}>
+			Total Time Planned for {group.name}:{" "}
+			{group.numberOfSessions * (group.sessionLength + group.breakLength)}{" "}
+			minutes.
+		</h2>
 		<InputField
 			label="Activity Name (e.g., 'Work', 'Study', 'Exercise'):"
 			type="text"
@@ -65,7 +70,11 @@ const ActivityGroup = ({
 			type="number"
 			value={group.sessionLength}
 			onChange={(e) =>
-				onChange(index, "sessionLength", Math.max(1, Number(e.currentTarget.value)))
+				onChange(
+					index,
+					"sessionLength",
+					Math.max(1, Number(e.currentTarget.value)),
+				)
 			}
 		/>
 		<InputField
@@ -73,9 +82,27 @@ const ActivityGroup = ({
 			type="number"
 			value={group.breakLength}
 			onChange={(e) =>
-				onChange(index, "breakLength", Math.max(0, Number(e.currentTarget.value)))
+				onChange(
+					index,
+					"breakLength",
+					Math.max(0, Number(e.currentTarget.value)),
+				)
 			}
-			min="0"
+			min="1"
+		/>
+
+		<InputField
+			label="Break Length After Activity (minutes)"
+			type="number"
+			value={group.interActivityBreak}
+			onChange={(e) =>
+				onChange(
+					index,
+					"interActivityBreak",
+					Math.max(0, Number(e.currentTarget.value)),
+				)
+			}
+			min="5"
 		/>
 		<button
 			onClick={() => onRemove(index)}

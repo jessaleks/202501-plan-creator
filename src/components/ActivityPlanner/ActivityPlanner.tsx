@@ -2,6 +2,7 @@ import ActivityGroup from "./ActivityGroup";
 import PlanPreview from "./PlanPreview";
 import { groups, generatedPlan, error } from "../../signals";
 import type { JSX } from "preact";
+import { slugify } from "../../lib/slugify";
 
 const ActivityPlanner = () => {
 	const handleGroupChange = (
@@ -41,11 +42,22 @@ const ActivityPlanner = () => {
 			);
 			const a = document.createElement("a");
 			a.href = url;
-			a.download = "plans.zip";
+			a.download = `${slugify(new Date().toLocaleString("en-UK"))}_plans.zip`;
 			a.click();
 			window.URL.revokeObjectURL(url);
 
-			if (plan) generatedPlan.value = plan;
+			if (plan) {
+				// Map the plan to include type field
+				const mappedPlan: PlanItem[] = plan.flatMap((group) =>
+					group.sessions.map((session) => ({
+						activity: session.name,
+						startTime: session.start,
+						endTime: session.end,
+						type: session.type as "activity" | "break" | "transition",
+					}))
+				);
+				generatedPlan.value = mappedPlan;
+			}
 			error.value = "";
 		} catch (err) {
 			error.value = err instanceof Error ? err.message : "An error occurred";
@@ -55,6 +67,10 @@ const ActivityPlanner = () => {
 	return (
 		<div className="container mx-auto p-4">
 			<h1 className="text-2xl font-bold mb-4">Activity Planner</h1>
+			<p className={"text-gray-600 mb-6"}>
+				Plan your day in a simple way without the use of complicated apps. All
+				you need is your calendar.
+			</p>
 			{error.value && (
 				<div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
 					{error.value}
@@ -62,7 +78,6 @@ const ActivityPlanner = () => {
 			)}
 
 			<form onSubmit={handleSubmit} className="space-y-4">
-
 				{groups.value.map((group, index) => (
 					<ActivityGroup
 						key={`${group.name}-${index}`}
@@ -86,6 +101,7 @@ const ActivityPlanner = () => {
 									numberOfSessions: 1,
 									sessionLength: 50,
 									breakLength: 10,
+									interActivityBreak: 15,  // Ensure this default value is set
 								},
 							];
 						}}

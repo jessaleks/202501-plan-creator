@@ -1,48 +1,85 @@
-import { groups, generatedPlan, remindersEnabled } from "../../signals";
+import {
+	groups,
+	generatedPlan,
+	remindersEnabled,
+	type PlanItem,
+} from "../../signals";
 
-const shortTime = (timeString: string) =>
-	new Date(`${timeString}`).toLocaleTimeString([], {
-		hour: "numeric",
-		minute: "numeric",
-	});
+interface Session {
+	type: "activity" | "break" | "transition"; // Added "transition" type
+	name: string;
+	startTime: string;
+	endTime: string;
+}
 
-const calculateTotalTime = (
-	sessions: { type: string; start: string; end: string }[],
-) => {
-	let totalMinutes = 0;
-	const today = new Date().toISOString().split("T")[0]; // Get today's date in YYYY-MM-DD format
-	for (const session of sessions) {
-		const start = new Date(`${today}T${session.start}`);
-		const end = new Date(`${today}T${session.end}`);
-		totalMinutes += (end.getTime() - start.getTime()) / 60000;
+function parseTimeString(timeString: string): Date | null {
+	const [time, ampm] = timeString.split(" ");
+	if (!time || !ampm) return null;
+	const [hoursStr, minutesStr, secondsStr] = time.split(":");
+	let hours = Number.parseInt(hoursStr, 10);
+	const minutes = Number.parseInt(minutesStr, 10) || 0;
+	const seconds = Number.parseInt(secondsStr, 10) || 0;
+	if (Number.isNaN(hours) || Number.isNaN(minutes) || Number.isNaN(seconds))
+		return null;
+	if (ampm.toUpperCase() === "PM" && hours < 12) hours += 12;
+	if (ampm.toUpperCase() === "AM" && hours === 12) hours = 0;
+	return new Date(1970, 0, 1, hours, minutes, seconds);
+}
+
+const shortTime = (timeString: string) => {
+	console.log("Formatting time for:", timeString); // Debug log
+	if (!timeString) return "";
+	try {
+		const parsedDate = parseTimeString(timeString);
+		if (!parsedDate) {
+			console.error("Invalid date parsing result");
+			return "";
+		}
+		return parsedDate
+			.toLocaleTimeString("en-UK", {
+				hour: "numeric",
+				minute: "2-digit",
+				hour12: true,
+			})
+			.toUpperCase();
+	} catch (e) {
+		console.error("Invalid date string:", timeString);
+		return "";
 	}
-	return (totalMinutes / 60).toFixed(1); // Convert to hours and format to 1 decimal place
+};
+
+const calculateTotalTime = (sessions: Session[]) => {
+	console.log("Calculating total time for sessions:", sessions); // Debug log
+	if (!sessions?.length) return "0.0";
+
+	let totalMinutes = 0;
+	for (const session of sessions) {
+		console.log("Processing session:", session); // Debug log
+		if (!session.startTime || !session.endTime) continue;
+
+		try {
+			const start = new Date(session.startTime);
+			const end = new Date(session.endTime);
+
+			console.log("Start:", start, "End:", end); // Debug log
+
+			if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+				console.error("Invalid date conversion:", { start, end });
+				continue;
+			}
+
+			totalMinutes += (end.getTime() - start.getTime()) / 60000;
+		} catch (e) {
+			console.error("Error calculating session time:", e);
+		}
+	}
+
+	console.log("Total minutes calculated:", totalMinutes); // Debug log
+	return Math.max(0, totalMinutes / 60).toFixed(1);
 };
 
 const PlanPreview = () => {
-	console.log("Groups:", groups.value);
-	console.log("Generated Plan:", generatedPlan.value);
-
-	const planData = groups.value
-		.filter(
-			(group) =>
-				group.name &&
-				generatedPlan.value.some((item) => item.activity === group.name),
-		)
-		.map((group) => ({
-			name: group.name,
-			sessions: generatedPlan.value
-				.filter((item) => item.activity === group.name)
-				.map((item) => ({
-					type: item.isBreak ? "break" : "session",
-					start: item.startTime,
-					end: item.endTime,
-				})),
-		}));
-
-	console.log("Plan Data:", planData);
-
-	if (!planData.length) {
+	if (!generatedPlan.value.length) {
 		return (
 			<div className="mt-6 p-4 bg-gray-100 rounded">
 				<p className="text-gray-600">No sessions generated yet.</p>
@@ -50,33 +87,86 @@ const PlanPreview = () => {
 		);
 	}
 
+	// Sort all sessions chronologically based on startTime
+	const sortedPlan = [...generatedPlan.value].sort((a, b) => {
+		const timeA = parseTimeString(a.startTime);
+		const timeB = parseTimeString(b.startTime);
+		if (timeA && timeB) {
+			return timeA.getTime() - timeB.getTime();
+		}
+		return 0;
+	});
+
+	// Group sessions by activity
+	const groupedActivities: { [name: string]: PlanItem[] } = {};
+
+	// Modify the grouping logic to separate transitions between activity groups
+	for (const session of sortedPlan) {
+		if (session.type === "activity") {
+			if (!groupedActivities[session.activity]) {
+				groupedActivities[session.activity] = [];
+			}
+			groupedActivities[session.activity].push(session);
+		} else if (session.type === "transition") {
+			if (!groupedActivities["Transition"]) {
+				groupedActivities["Transition"] = [];
+			}
+			groupedActivities["Transition"].push(session);
+		} else {
+			// session.type === "break"
+			// Associate break with the latest activity or transition
+			const activityNames = Object.keys(groupedActivities);
+			const lastActivity = activityNames[activityNames.length - 1];
+			if (lastActivity && lastActivity !== "Transition") {
+				groupedActivities[lastActivity].push(session);
+			} else {
+				groupedActivities["General"] = groupedActivities["General"] || [];
+				groupedActivities["General"].push(session);
+			}
+		}
+	}
+
+	// Initialize a global counter for numbering
+	let globalCounter = 1;
+
+	// Update the JSX to reset session numbering per activity group and handle transitions separately
 	return (
 		<div className="mt-6 p-4 bg-gray-100 rounded">
 			<h2 className="text-xl font-bold mb-4">Generated Plan</h2>
-			{remindersEnabled.value && (
-				<p className="text-blue-600 text-sm mb-2">
-					Calendar reminders are enabled.
-				</p>
-			)}
-			{planData.map(({ name, sessions }) => {
-				let sessionCount = 1;
-				let breakCount = 1;
-				const totalTime = calculateTotalTime(sessions);
+
+			{Object.entries(groupedActivities).map(([activityName, sessions]) => {
+				// Skip the "General" group if it's empty
+				if (activityName === "General" && sessions.length === 0) return null;
+
+				// Reset session counter for each activity group
+				let sessionCounter = 1;
+
 				return (
-					<div key={name} className="mb-4">
-						<h3 className="text-lg font-semibold">
-							{name} (Total Time: {totalTime} hours)
-						</h3>
-						<ul className="list-disc pl-6">
+					<div key={activityName} className="mb-6">
+						<h3 className="text-lg font-semibold mb-2">{activityName}</h3>
+						<ul className="list-decimal list-inside">
 							{sessions.map((session) => {
-								const label =
-									session.type === "break"
-										? `Break ${breakCount++}`
-										: `Session ${sessionCount++}`;
+								let label = "";
+								let textColor = "text-gray-700";
+
+								if (session.type === "activity") {
+									label = `Session ${sessionCounter++}`;
+									textColor = "text-green-700";
+								} else if (session.type === "break") {
+									label = `Break ${sessionCounter++}`;
+									textColor = "text-yellow-700";
+								} else if (session.type === "transition") {
+									label = "Activity Transition";
+									textColor = "text-blue-700";
+								}
+
 								return (
-									<li key={`${name}-${label}`} className="text-gray-700">
-										{label}: {shortTime(session.start)} -{" "}
-										{shortTime(session.end)}
+									<li
+										key={`${activityName}-${session.name}-${session.startTime}`}
+										className={textColor}
+									>
+										{label}: {shortTime(session.startTime)} -{" "}
+										{shortTime(session.endTime)}
 									</li>
 								);
 							})}
