@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import JSZip from "jszip";
 import { v4 as uuidv4 } from "uuid";
+import { slugify } from "../../../lib/slugify";
 
 // Define the Session type
 type Session = {
@@ -55,6 +56,9 @@ END:VEVENT
 // Function to implement rate limiting.
 // It's a very basic rate limiter that keeps track of the number of requests made by an IP address
 const rateLimit = (limit: number, windowMs: number) => {
+	if (process.env.NODE_ENV === "development") {
+		return () => true;
+	}
 	const requests = new Map<string, { count: number; timestamp: number }>();
 
 	return (ip: string) => {
@@ -85,9 +89,11 @@ export const POST: APIRoute = async ({ request }) => {
 	const ip =
 		request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip");
 
-	// Check rate limit
-	if (!ip || !rateLimiter(ip)) {
-		return new Response("Too many requests", { status: 429 });
+	// Check rate limit (not in development mode)
+	if (process.env.NODE_ENV !== "development") {
+		if (!ip || !rateLimiter(ip)) {
+			return new Response("Rate limit exceeded", { status: 429 });
+		}
 	}
 
 	const { groups, remindersEnabled } = await request.json();
@@ -206,7 +212,7 @@ export const POST: APIRoute = async ({ request }) => {
 		// Generate ICS content and add it to the to zip
 		const icsContent = generateICS(events, remindersEnabled === true);
 		zip.file(
-			`${encodeURIComponent(new Date().toDateString())}_${encodeURIComponent(name.replace(/\s+/g, "_"))}.ics`,
+			`${slugify(new Date().toDateString())}_${slugify(name.replace(/\s+/g, "_"))}.ics`,
 			icsContent,
 		);
 	}

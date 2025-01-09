@@ -1,9 +1,4 @@
-import {
-	groups,
-	generatedPlan,
-	remindersEnabled,
-	type PlanItem,
-} from "../../signals";
+import { generatedPlan, type PlanItem } from "../../signals";
 
 interface Session {
 	type: "activity" | "break" | "transition"; // Added "transition" type
@@ -27,7 +22,6 @@ function parseTimeString(timeString: string): Date | null {
 }
 
 const shortTime = (timeString: string) => {
-	console.log("Formatting time for:", timeString); // Debug log
 	if (!timeString) return "";
 	try {
 		const parsedDate = parseTimeString(timeString);
@@ -108,10 +102,10 @@ const PlanPreview = () => {
 			}
 			groupedActivities[session.activity].push(session);
 		} else if (session.type === "transition") {
-			if (!groupedActivities["Transition"]) {
-				groupedActivities["Transition"] = [];
+			if (!groupedActivities.Transition) {
+				groupedActivities.Transition = [];
 			}
-			groupedActivities["Transition"].push(session);
+			groupedActivities.Transition.push(session);
 		} else {
 			// session.type === "break"
 			// Associate break with the latest activity or transition
@@ -120,14 +114,14 @@ const PlanPreview = () => {
 			if (lastActivity && lastActivity !== "Transition") {
 				groupedActivities[lastActivity].push(session);
 			} else {
-				groupedActivities["General"] = groupedActivities["General"] || [];
-				groupedActivities["General"].push(session);
+				groupedActivities.General = groupedActivities.General || [];
+				groupedActivities.General.push(session);
 			}
 		}
 	}
 
 	// Initialize a global counter for numbering
-	let globalCounter = 1;
+	const globalCounter = 1;
 
 	// Update the JSX to reset session numbering per activity group and handle transitions separately
 	return (
@@ -161,10 +155,7 @@ const PlanPreview = () => {
 								}
 
 								return (
-									<li
-										key={`${activityName}-${session.name}-${session.startTime}`}
-										className={textColor}
-									>
+									<li key={activityName + sessionCounter} className={textColor}>
 										{label}: {shortTime(session.startTime)} -{" "}
 										{shortTime(session.endTime)}
 									</li>
