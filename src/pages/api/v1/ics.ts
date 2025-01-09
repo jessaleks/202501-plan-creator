@@ -1,11 +1,20 @@
 import type { APIRoute } from "astro";
 import JSZip from "jszip";
 import { v4 as uuidv4 } from "uuid";
-import { slugify } from "../../../lib/slugify";
 
+// Define the Session type
+type Session = {
+	type: "activity" | "break" | "transition";
+	name: string;
+	start: string;
+	end: string;
+};
+
+// Function to format date in the required format
 const formatDate = (date: Date) =>
 	`${date.toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
 
+// Function to generate ICS content
 const generateICS = (
 	events: { summary: string; start: Date; end: Date }[],
 	includeAlarm: boolean,
@@ -14,7 +23,7 @@ const generateICS = (
 		"BEGIN:VCALENDAR",
 		"VERSION:2.0",
 		"CALSCALE:GREGORIAN",
-		"PRODID:-//ADHD Planner//EN",
+		"PRODID:-//Plan Creator//EN",
 	];
 	const footer = ["END:VCALENDAR"];
 
@@ -43,9 +52,47 @@ END:VEVENT
 	return [...header, ...eventsContent, ...footer].join("\n");
 };
 
+// Function to implement rate limiting.
+// It's a very basic rate limiter that keeps track of the number of requests made by an IP address
+const rateLimit = (limit: number, windowMs: number) => {
+	const requests = new Map<string, { count: number; timestamp: number }>();
+
+	return (ip: string) => {
+		const currentTime = Date.now();
+		const requestInfo = requests.get(ip) || {
+			count: 0,
+			timestamp: currentTime,
+		};
+
+		if (currentTime - requestInfo.timestamp > windowMs) {
+			requestInfo.count = 1;
+			requestInfo.timestamp = currentTime;
+		} else {
+			requestInfo.count += 1;
+		}
+
+		requests.set(ip, requestInfo);
+
+		return requestInfo.count <= limit;
+	};
+};
+
+// Create a rate limiter with a limit of 20 requests per 15 minutes
+const rateLimiter = rateLimit(20, 15 * 60 * 1000); // 100 requests per 15 minutes
+
+// Define the POST API route
 export const POST: APIRoute = async ({ request }) => {
+	const ip =
+		request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip");
+
+	// Check rate limit
+	if (!ip || !rateLimiter(ip)) {
+		return new Response("Too many requests", { status: 429 });
+	}
+
 	const { groups, remindersEnabled } = await request.json();
 
+	// Validate the input
 	if (!groups || !Array.isArray(groups)) {
 		return new Response("Invalid input", { status: 400 });
 	}
@@ -53,11 +100,13 @@ export const POST: APIRoute = async ({ request }) => {
 	const zip = new JSZip();
 	let currentTime = new Date();
 	const allEvents = [];
+
 	const planPreview: {
 		name: string;
-		sessions: { type: "activity" | "break" | "transition"; name: string; start: string; end: string }[];
+		sessions: Session[];
 	}[] = [];
 
+	// Process each group
 	for (let i = 0; i < groups.length; i++) {
 		const group = groups[i];
 		const {
@@ -68,6 +117,7 @@ export const POST: APIRoute = async ({ request }) => {
 			interActivityBreak = 15,
 		} = group;
 
+		// Validate group fields
 		if (
 			!name ||
 			!numberOfSessions ||
@@ -78,9 +128,12 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 
 		const events = [];
-		const groupPlan = { name, sessions: [] };
+		const sessions: Session[] = [];
+
+		const groupPlan = { name, sessions };
 		let sessionsRemaining = numberOfSessions;
 
+		// Create sessions and breaks
 		while (sessionsRemaining > 0) {
 			const sessionStart = new Date(currentTime);
 			const sessionEnd = new Date(
@@ -124,7 +177,7 @@ export const POST: APIRoute = async ({ request }) => {
 			}
 		}
 
-		// Add inter-activity break if this isn't the last group
+		// Add an inter-activity break if this isn't the last group
 		if (i < groups.length - 1 && interActivityBreak > 0) {
 			const breakStart = new Date(currentTime);
 			const breakEnd = new Date(
@@ -138,7 +191,7 @@ export const POST: APIRoute = async ({ request }) => {
 			});
 
 			groupPlan.sessions.push({
-				type: "transition", // Ensure type is set to "transition"
+				type: "transition",
 				name: "Activity Transition",
 				start: breakStart.toLocaleTimeString(),
 				end: breakEnd.toLocaleTimeString(),
@@ -150,13 +203,15 @@ export const POST: APIRoute = async ({ request }) => {
 		allEvents.push(...events);
 		planPreview.push(groupPlan);
 
+		// Generate ICS content and add it to the to zip
 		const icsContent = generateICS(events, remindersEnabled === true);
 		zip.file(
-			`${slugify(new Date().toDateString())}_${name.replace(/\s+/g, "_")}.ics`,
+			`${encodeURIComponent(new Date().toDateString())}_${encodeURIComponent(name.replace(/\s+/g, "_"))}.ics`,
 			icsContent,
 		);
 	}
 
+	// Generate zip file
 	const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
 	const combinedContent = {
 		zipBase64: zipBuffer.toString("base64"),
