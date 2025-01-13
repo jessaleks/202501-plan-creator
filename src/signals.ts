@@ -27,4 +27,4 @@ export const groups = signal<ActivityGroupData[]>([
 
 export const generatedPlan = signal<PlanItem[]>([]);
 export const error = signal<string>("");
-export const remindersEnabled = signal<boolean>(false);
+export const remindersEnabled = signal<boolean>(true);
