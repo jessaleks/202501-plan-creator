@@ -15,6 +15,7 @@
     "@preact/signals": "^2.0.0",
     "astro": "^5.1.2",
     "jszip": "^3.10.1",
+    "motion": "^11.16.2",
     "preact": "^10.25.4",
     "tailwindcss": "^3.4.17",
     "uuid": "^11.0.3"
