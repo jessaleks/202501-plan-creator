@@ -29,5 +29,11 @@
     "@testing-library/preact": "^3.2.4",
     "@types/jest": "^29.5.14",
     "jest": "^29.7.0"
+  },
+  "overrides": {
+    "react": "preact/compat",
+    "react-dom/test-utils": "preact/test-utils",
+    "react-dom": "preact/compat",
+    "react/jsx-runtime": "preact/jsx-runtime"
   }
 }
