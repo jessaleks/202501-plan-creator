@@ -15,4 +15,14 @@ export default defineConfig({
 			expiration: 60 * 60 * 3, // 3 hours
 		},
 	}),
+	vite: {
+		resolve: {
+			alias: {
+				react: "preact/compat",
+				"react-dom/test-utils": "preact/test-utils",
+				"react-dom": "preact/compat",
+				"react/jsx-runtime": "preact/jsx-runtime",
+			},
+		},
+	},
 });

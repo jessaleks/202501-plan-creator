@@ -1,6 +1,7 @@
+import { animate } from "motion";
 import type { ActivityGroupData } from "../../signals";
-import { LazyMotion, domAnimation } from "motion/react";
-import * as m from "motion/react-m";
+import { useEffect } from "preact/hooks";
+
 type ActivityGroupProps = {
 	group: ActivityGroupData;
 	index: number;
@@ -41,20 +42,29 @@ const ActivityGroup = ({
 	index,
 	onChange,
 	onRemove,
-}: ActivityGroupProps) => (
-	<LazyMotion features={domAnimation}>
-		<m.div
+}: ActivityGroupProps) => {
+	useEffect(() => {
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			return;
+		}
+		animate(
+			`[data-id="${index}"]`,
+			{
+				scale: [0.97, 1],
+				opacity: [0.9, 1],
+			},
+			{
+				type: "spring",
+				stiffness: 1020,
+				damping: 57,
+				mass: 0.5,
+			},
+		);
+	}, [index]);
+	return (
+		<div
 			className="p-4 border border-gray-400 rounded space-y-4 bg-white shadow-sm"
-			initial={{ scale: 0.7, screenY: -10 }}
-			animate={{ scale: 1, screenY: 10 }}
-			transition={{
-				duration: 0.3,
-				scale: {
-					type: "spring",
-					stiffness: 500,
-					damping: 30,
-				},
-			}}
+			data-id={index}
 		>
 			<h2 class={"font-bold"}>
 				Total Time Planned for {group.name}:{" "}
@@ -125,8 +135,8 @@ const ActivityGroup = ({
 			>
 				Remove
 			</button>
-		</m.div>
-	</LazyMotion>
-);
+		</div>
+	);
+};
 
 export default ActivityGroup;
